@@ -1,3 +1,5 @@
 <?php
 
-require_once 'vendor/PhpParser/autoload.php';
+require_once 'vendor/PhpParser/Autoloader.php';
+
+echo 'Yes';

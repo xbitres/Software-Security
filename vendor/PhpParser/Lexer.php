@@ -12,7 +12,6 @@ class Lexer
     protected $pos;
     protected $line;
     protected $filePos;
-    protected $prevCloseTagHasNewline;
 
     protected $tokenMap;
     protected $dropTokens;
@@ -68,10 +67,6 @@ class Lexer
         $this->pos  = -1;
         $this->line =  1;
         $this->filePos = 0;
-
-        // If inline HTML occurs without preceding code, treat it as if it had a leading newline.
-        // This ensures proper composability, because having a newline is the "safe" assumption.
-        $this->prevCloseTagHasNewline = true;
     }
 
     protected function resetErrors() {
@@ -171,11 +166,6 @@ class Lexer
             } elseif (!isset($this->dropTokens[$token[0]])) {
                 $value = $token[1];
                 $id = $this->tokenMap[$token[0]];
-                if (T_CLOSE_TAG === $token[0]) {
-                    $this->prevCloseTagHasNewline = false !== strpos($token[1], "\n");
-                } else if (T_INLINE_HTML === $token[0]) {
-                    $startAttributes['hasLeadingNewline'] = $this->prevCloseTagHasNewline;
-                }
 
                 $this->line += substr_count($value, "\n");
                 $this->filePos += \strlen($value);

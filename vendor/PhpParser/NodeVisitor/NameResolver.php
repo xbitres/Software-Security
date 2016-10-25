@@ -74,9 +74,7 @@ class NameResolver extends NodeVisitorAbstract
                 $node->class = $this->resolveClassName($node->class);
             }
         } elseif ($node instanceof Stmt\Catch_) {
-            foreach ($node->types as &$type) {
-                $type = $this->resolveClassName($type);
-            }
+            $node->type = $this->resolveClassName($node->type);
         } elseif ($node instanceof Expr\FuncCall) {
             if ($node->name instanceof Name) {
                 $node->name = $this->resolveOtherName($node->name, Stmt\Use_::TYPE_FUNCTION);
