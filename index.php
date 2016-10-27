@@ -3,17 +3,9 @@
 require_once 'classes/PHPSecurityInspector.php';
 
 if (isset($_POST['submit']) && isset($_FILES['code-to-check'])) {
-    $code = file_get_contents($_FILES['code-to-check']['tmp_name']);
-    echo '<pre>';
-    var_dump($code);
-    echo '</pre>';
+    $code = '<?php ' . file_get_contents($_FILES['code-to-check']['tmp_name']);
 
-    /*
-    $code = '<?php $nis=$_POST[\'nis\'];
-    $query="SELECT *FROM siswa WHERE nis=\'$nis\'";
-    $q=mysql_query($query,$koneksi); ?>';
-
-    $inspector = new PHPSecurityInspector($code);*/
+    $inspector = new PHPSecurityInspector($code);
 } else {
 ?>
 <!DOCTYPE html>
