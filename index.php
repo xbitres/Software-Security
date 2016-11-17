@@ -3,7 +3,13 @@
 require_once 'classes/PHPSecurityInspector.php';
 
 if (isset($_POST['submit']) && isset($_FILES['code-to-check'])) {
-    $code = '<?php ' . file_get_contents($_FILES['code-to-check']['tmp_name']);
+    $file = file_get_contents($_FILES['code-to-check']['tmp_name']);
+    if (strpos($file, '<?php') !== false) {
+        $code = $file;
+    } else {
+        $code = '<?php ' . $file;
+    }
+
 
     $inspector = new PHPSecurityInspector($code);
 } else {
