@@ -10,13 +10,42 @@ use PhpParser\ParserFactory;
 class PHPSecurityInspector {
     private $_parser;
     private $vulnerabilities = array(
-      "SQL" => array("mysql_query","mysql_unbuffered_query","mysql_db_query",
-            "mysqli_query","mysqli_real_query","mysqli_master_query",
-            "mysqli_multi_query","mysqli_stmt_execute","mysqli_execute",
-            "mysqli::query","mysqli::multi_query","mysqli::real_query",
-            "mysqli_stmt::execute","db2_exec", "pg_query","pg_send_query"),
-      "XSS" => array("echo","print","printf","die","error","exit","file_put_contents",
-	              "file_get_contents"),);
+      "SQL" => array(
+        //
+        "mysql_query" => array("mysql_escape_string", "mysql_real_escape_string"),
+        "mysql_unbuffered_query" => array("mysql_escape_string", "mysql_real_escape_string"),
+        "mysql_db_query" => array("mysql_escape_string", "mysql_real_escape_string"),
+        //
+        "mysqli_query" => array("mysqli_escape_string", "mysqli_real_escape_string"),
+        "mysqli_real_query" => array("mysqli_escape_string", "mysqli_real_escape_string"),
+        "mysqli_master_query" => array("mysqli_escape_string", "mysqli_real_escape_string"),
+        "mysqli_multi_query" => array("mysqli_escape_string", "mysqli_real_escape_string"),
+        //
+        "mysqli_stmt_execute" => array("mysqli_stmt_bind_param"),
+        "mysqli_execute" => array("mysqli_stmt_bind_param"),
+        //
+        "mysqli::query" => array("mysqli::escape_string", "mysqli::real_escape_string"),
+        "mysqli::multi_query" => array("mysqli::escape_string", "mysqli::real_escape_string"),
+        "mysqli::real_query" => array("mysqli::escape_string", "mysqli::real_escape_string"),
+        //
+        "mysqli_stmt::execute" => array("mysqli_stmt::bind_param"),
+        //
+        "db2_exec" => array("db2_escape_string"),
+        //
+        "pg_query" => array("pg_escape_string","pg_escape_bytea"),
+        "pg_send_query"=> array("pg_escape_string","pg_escape_bytea")),
+      "XSS" => array(
+        //
+        "echo" => array(" htmlentities", "htmlspecialchars","strip_tags","urlencode"),
+        "print" => array(" htmlentities", "htmlspecialchars","strip_tags","urlencode"),
+        "printf" => array(" htmlentities", "htmlspecialchars","strip_tags","urlencode"),
+        "die" => array(" htmlentities", "htmlspecialchars","strip_tags","urlencode"),
+        "error" => array(" htmlentities", "htmlspecialchars","strip_tags","urlencode"),
+        "exit" => array(" htmlentities", "htmlspecialchars","strip_tags","urlencode"),
+        //
+        "file_put_contents" => array(" htmlentities", "htmlspecialchars","strip_tags","urlencode"),
+        "file_get_contents" => array(" htmlentities", "htmlspecialchars","strip_tags","urlencode")),
+      );
 
     /**
      * @param String    $code       Code to be inspected
