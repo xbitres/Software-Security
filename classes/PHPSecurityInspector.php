@@ -2,6 +2,8 @@
 
 require_once 'vendor/PhpParser/Autoloader.php';
 
+require_once 'Sink.php';
+
 PhpParser\Autoloader::register();
 
 use PhpParser\Error;
@@ -57,14 +59,38 @@ class PHPSecurityInspector {
             $stmts = $this->_parser->parse($code);
             echo '<pre>';
             print_r($stmts);
+            echo '<h1>Vunerabilities</h1>';
+            print_r($this->checkVunerabilities($stmts, array()));
             echo '</pre>';
         } catch (Error $e) {
             echo 'Parse Error: ', $e->getMessage();
         }
     }
 
+    /**
+     * @param PhpParser\Node\Expr $expr
+     */
     public function searchSinks($expr) {
+        $sinks = array();
+        # echo $expr->getType() . '<br />';
 
+        if ($expr->getType() === 'Expr_FuncCall') {
+            /** @var PhpParser\Node\Expr\FuncCall $expr */
+            foreach (array_keys($this->vulnerabilities['SQL']) as $sink) {
+                if ($sink === $expr->name->parts[0]) {
+                    # Construction of vars used in the sink
+                    $vars = array();
+                    /** @var PhpParser\Node\Arg $arg */
+                    foreach ($expr->args as $arg) {
+                        $args = array_push($vars, $arg->value);
+                    }
+
+                    $sinks[$expr->getLine()] = new Sink($sink, $expr->getLine(), false, $this->vulnerabilities['SQL'][$sink], $vars);
+                }
+            }
+        }
+
+        return $sinks;
     }
 
     /**
@@ -75,8 +101,10 @@ class PHPSecurityInspector {
      */
     public function checkVunerabilities($context, $earlierVars) {
         $sinks = array();
+
+        /** @var PhpParser\Node\Expr\Assign $line */
         foreach ($context as $line) {
-            array_merge($sinks,$this->searchSinks($line));
+            $sinks = array_merge($sinks, $this->searchSinks($line->expr));
         }
 
         return $sinks;
