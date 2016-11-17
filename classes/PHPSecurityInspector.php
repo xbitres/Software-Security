@@ -16,7 +16,7 @@ class PHPSecurityInspector {
             "mysqli::query","mysqli::multi_query","mysqli::real_query",
             "mysqli_stmt::execute","db2_exec", "pg_query","pg_send_query"),
       "XSS" => array("echo","print","printf","die","error","exit","file_put_contents",
-			      "file_get_contents"),);
+	              "file_get_contents"),);
 
     /**
      * @param String    $code       Code to be inspected
@@ -32,5 +32,24 @@ class PHPSecurityInspector {
         } catch (Error $e) {
             echo 'Parse Error: ', $e->getMessage();
         }
+    }
+
+    public function searchSinks($expr) {
+
+    }
+
+    /**
+     * For a given context it checks for sinks within it.
+     *
+     * @param  String           $context        Program context passed in the PhpParser framework
+     * @return array of Sinks                   [description]
+     */
+    public function checkVunerabilities($context, $earlierVars) {
+        $sinks = array();
+        foreach ($context as $line) {
+            array_merge($sinks,$this->searchSinks($line));
+        }
+
+        return $sinks;
     }
 }
