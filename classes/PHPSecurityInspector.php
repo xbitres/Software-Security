@@ -11,6 +11,30 @@ use PhpParser\ParserFactory;
 
 class PHPSecurityInspector {
     private $_parser;
+    private $_entryPoints = array(
+        "SQL" => array(
+            "_GET",
+            "_POST",
+            "_COOKIE",
+            "_REQUEST",
+            "HTTP_GET_VARS",
+            "HTTP_POST_VARS",
+            "HTTP_COOKIE_VARS",
+            "HTTP_REQUEST_VARS",
+        ),
+        "XSS" => array(
+            "_GET",
+            "_POST",
+            "_COOKIE",
+            "_REQUEST",
+            "HTTP_GET_VARS",
+            "HTTP_POST_VARS",
+            "HTTP_COOKIE_VARS",
+            "HTTP_REQUEST_VARS",
+            "_FILES",
+            "_SERVERS",
+        ),
+    );
     private $vulnerabilities = array(
       "SQL" => array(
         //
@@ -70,7 +94,7 @@ class PHPSecurityInspector {
     /**
      * @param PhpParser\Node\Expr $expr
      */
-    public function searchSinks($expr) {
+    public function searchSQLSinks($expr) {
         $sinks = array();
         # echo $expr->getType() . '<br />';
 
@@ -104,9 +128,67 @@ class PHPSecurityInspector {
 
         /** @var PhpParser\Node\Expr\Assign $line */
         foreach ($context as $line) {
-            $sinks = array_merge($sinks, $this->searchSinks($line->expr));
+            $sinks = array_merge($sinks, $this->searchSQLSinks($line->expr));
+        }
+
+        $varsOfVars = array(); # Stack containing variables related to the sink
+
+        /** @var Sink $sink */
+        foreach ($sinks as $sink) {
+            $varsOfVars = $sink->vars;
+
+            while (!empty($varsOfVars)) {
+                /** @var \PhpParser\Node\Expr\Variable $var */
+                $var = array_pop($varsOfVars);
+
+                echo $var->name . '<br>';
+
+                if (!$this->variableSecure($var,$context)) {
+                    if ($connectedVars = $this->getConnectedVars($var, $context)) {
+                        $varsOfVars = array_merge($connectedVars, $varsOfVars);
+                    } else {
+                        $sink->secure = false;
+                    }
+                }
+            }
+
         }
 
         return $sinks;
+    }
+
+    /**
+     * @param \PhpParser\Node\Expr\Variable $var
+     * @param $context
+     * @return bool
+     */
+    private function getConnectedVars($var, $context) {
+        $connectedVars = array();
+
+        /** @var \PhpParser\Node\Expr\Assign $line */
+        foreach ($context as $line) { # Search in the context for the variable
+            if ($line->getType() === 'Expr_Assign') {
+                if ($line->var->name === $var->name) {
+                    # If we found an assignment changing the variable we search for the connected vars
+                    if ($line->expr->getType() === 'Scalar_Encapsed') {
+                        /** @var \PhpParser\Node $node */
+                        foreach ($line->expr->parts as $node) {
+                            if ($node->getType() === 'Expr_Variable') {
+                                array_push($connectedVars, $node);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (empty($connectedVars))
+            return false;
+        else
+            return $connectedVars;
+    }
+
+    private function variableSecure($var, $context) {
+        return false;
     }
 }

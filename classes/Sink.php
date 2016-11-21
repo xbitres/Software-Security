@@ -3,7 +3,7 @@
 class Sink {
     public $type;
     public $line;
-    public $secure = false;
+    public $secure = true;
     public $possibleSanitizations;
     public $vars;
 
