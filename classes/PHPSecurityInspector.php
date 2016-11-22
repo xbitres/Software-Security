@@ -128,8 +128,16 @@ class PHPSecurityInspector {
 
         /** @var PhpParser\Node\Expr\Assign $line */
         foreach ($context as $line) {
-            $sinks = array_merge($sinks, $this->searchSQLSinks($line->expr));
+            $sks = array();
+            if ($line->getType() === 'Expr_Assign') {
+                $sks = $this->searchSQLSinks($line->expr);
+            } else if ($line->getType() === 'Expr_FuncCall') {
+                $sks = $this->searchSQLSinks($line);
+            }
+
+            $sinks = array_merge($sinks, $sks);
         }
+
 
         $varsOfVars = array(); # Stack containing variables related to the sink
 
@@ -143,6 +151,7 @@ class PHPSecurityInspector {
 
                 echo $var->name . '<br>';
 
+                echo $var->getType() . '<br>';
 
                 var_dump($this->variableSecure($var,$context));
                 var_dump($this->getConnectedVars($var, $context));
@@ -223,11 +232,13 @@ class PHPSecurityInspector {
 
         /** @var \PhpParser\Node\Expr\Assign $line */
         foreach ($context as $line) {
-            if ($line->var->name === $var->name) {
-                # Verificar se os parametros do assignment nao sao entrypoints
-                if ($line->expr->getType() === 'Expr_ArrayDimFetch') {
-                    if (in_array($line->expr->var->name, $this->_entryPoints['SQL'])) {
-                        return true;
+            if ($line->getType() === 'Expr_Assign') {
+                if ($line->var->name === $var->name) {
+                    # Verificar se os parametros do assignment nao sao entrypoints
+                    if ($line->expr->getType() === 'Expr_ArrayDimFetch') {
+                        if (in_array($line->expr->var->name, $this->_entryPoints['SQL'])) {
+                            return true;
+                        }
                     }
                 }
             }
