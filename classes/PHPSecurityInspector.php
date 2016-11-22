@@ -109,7 +109,7 @@ class PHPSecurityInspector {
                         $args = array_push($vars, $arg->value);
                     }
 
-                    $sinks[$expr->getLine()] = new Sink($sink, $expr->getLine(), false, $this->vulnerabilities['SQL'][$sink], $vars);
+                    $sinks[$expr->getLine()] = new Sink($sink, $expr->getLine(), true, $this->vulnerabilities['SQL'][$sink], $vars);
                 }
             }
         }
@@ -142,6 +142,10 @@ class PHPSecurityInspector {
                 $var = array_pop($varsOfVars);
 
                 echo $var->name . '<br>';
+
+
+                var_dump($this->variableSecure($var,$context));
+                var_dump($this->getConnectedVars($var, $context));
 
                 if (!$this->variableSecure($var,$context)) {
                     if ($connectedVars = $this->getConnectedVars($var, $context)) {
@@ -188,7 +192,47 @@ class PHPSecurityInspector {
             return $connectedVars;
     }
 
+    /**
+     * @param \PhpParser\Node\Expr\Variable $var
+     * @param $context
+     * @return bool
+     */
     private function variableSecure($var, $context) {
+        # Verificar se var nao tem connected vars
+        # Caso tenha connected vars entao não é secure
+        # Caso não tenha então:
+            # Verificar se var é entry point
+        if (empty($this->getConnectedVars($var, $context))) {
+            if (!$this->variableInEntryPoint($var, $context)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param \PhpParser\Node\Expr\Variable $var
+     * @param $context
+     * @return bool
+     */
+    private function variableInEntryPoint($var, $context) {
+        if (in_array($var->name, $this->_entryPoints['SQL'])) {
+            return true;
+        }
+
+        /** @var \PhpParser\Node\Expr\Assign $line */
+        foreach ($context as $line) {
+            if ($line->var->name === $var->name) {
+                # Verificar se os parametros do assignment nao sao entrypoints
+                if ($line->expr->getType() === 'Expr_ArrayDimFetch') {
+                    if (in_array($line->expr->var->name, $this->_entryPoints['SQL'])) {
+                        return true;
+                    }
+                }
+            }
+        }
+
         return false;
     }
 }
