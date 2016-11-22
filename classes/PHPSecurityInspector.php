@@ -151,8 +151,6 @@ class PHPSecurityInspector {
 
                 echo $var->name . '<br>';
 
-                echo $var->getType() . '<br>';
-
                 var_dump($this->variableSecure($var,$context));
                 var_dump($this->getConnectedVars($var, $context));
 
@@ -186,10 +184,30 @@ class PHPSecurityInspector {
                     if ($line->expr->getType() === 'Scalar_Encapsed') {
                         /** @var \PhpParser\Node $node */
                         foreach ($line->expr->parts as $node) {
+
                             if ($node->getType() === 'Expr_Variable') {
                                 array_push($connectedVars, $node);
+                            } else if ($node->getType() === 'Expr_ArrayDimFetch') {
+                                array_push($connectedVars, $node->var);
                             }
                         }
+                    } else if ($line->expr->getType() === 'Expr_BinaryOp_Concat') {
+                        $exprTmp = $line->expr;
+                        do {
+                            if ($exprTmp->right->getType() === 'Expr_Variable') {
+                                array_push($connectedVars, $exprTmp->right);
+                            } else if ($exprTmp->right->getType() === 'Expr_ArrayDimFetch') {
+                                array_push($connectedVars, $exprTmp->right->var);
+                            }
+
+                            if ($exprTmp->left->getType() === 'Expr_Variable') {
+                                array_push($connectedVars, $exprTmp->right);
+                            } else if ($exprTmp->left->getType() === 'Expr_ArrayDimFetch') {
+                                array_push($connectedVars, $exprTmp->right->var);
+                            }
+
+                            $exprTmp = $exprTmp->left;
+                        } while ($exprTmp->getType() === 'Expr_BinaryOp_Concat');
                     }
                 }
             }
