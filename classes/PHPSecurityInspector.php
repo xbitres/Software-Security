@@ -109,7 +109,7 @@ class PHPSecurityInspector {
                         $args = array_push($vars, $arg->value);
                     }
 
-                    $sinks[$expr->getLine()] = new Sink($sink, $expr->getLine(), true, $this->vulnerabilities['SQL'][$sink], $vars);
+                    $sinks[$expr->getLine()] = new Sink($sink, $expr->getLine(), false, $this->vulnerabilities['SQL'][$sink], $vars);
                 }
             }
         }
@@ -140,7 +140,7 @@ class PHPSecurityInspector {
 
 
         $varsOfVars = array(); # Stack containing variables related to the sink
-
+        $unsecureVars = array();
         /** @var Sink $sink */
         foreach ($sinks as $sink) {
             $varsOfVars = $sink->vars;
@@ -148,22 +148,30 @@ class PHPSecurityInspector {
             while (!empty($varsOfVars)) {
                 /** @var \PhpParser\Node\Expr\Variable $var */
                 $var = array_pop($varsOfVars);
+                array_push($unsecureVars, $var);
 
                 echo $var->name . '<br>';
 
                 var_dump($this->variableSecure($var,$context, $sink->possibleSanitizations));
                 var_dump($this->getConnectedVars($var, $context));
 
-                if (!$this->variableSecure($var,$context, $sink->possibleSanitizations)) {
+                if ($this->variableSecure($var,$context, $sink->possibleSanitizations)) {
+                    echo 'Variable <strong>' . $var->name . '</strong> secure.';
+                    array_pop($unsecureVars);
+                } else {
                     if ($connectedVars = $this->getConnectedVars($var, $context)) {
+                        array_pop($unsecureVars);
                         $varsOfVars = array_merge($connectedVars, $varsOfVars);
-                    } else {
-                        $sink->secure = false;
                     }
                 }
             }
 
+            if (empty($unsecureVars))
+                $sink->secure = true;
+
         }
+
+
 
         return $sinks;
     }
