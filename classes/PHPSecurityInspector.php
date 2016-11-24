@@ -151,10 +151,10 @@ class PHPSecurityInspector {
 
                 echo $var->name . '<br>';
 
-                var_dump($this->variableSecure($var,$context));
+                var_dump($this->variableSecure($var,$context, $sink->possibleSanitizations));
                 var_dump($this->getConnectedVars($var, $context));
 
-                if (!$this->variableSecure($var,$context)) {
+                if (!$this->variableSecure($var,$context, $sink->possibleSanitizations)) {
                     if ($connectedVars = $this->getConnectedVars($var, $context)) {
                         $varsOfVars = array_merge($connectedVars, $varsOfVars);
                     } else {
@@ -224,7 +224,7 @@ class PHPSecurityInspector {
      * @param $context
      * @return bool
      */
-    private function variableSecure($var, $context) {
+    private function variableSecure($var, $context, $sanitizations) {
         # Verificar se var nao tem connected vars
         # Caso tenha connected vars entao não é secure
         # Caso não tenha então:
@@ -232,6 +232,31 @@ class PHPSecurityInspector {
         if (empty($this->getConnectedVars($var, $context))) {
             if (!$this->variableInEntryPoint($var, $context)) {
                 return true;
+            } else if ($this->variableSanitized($var, $context, $sanitizations)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param $var
+     * @param $context
+     * @param array $sanitizations
+     * @return bool
+     */
+    private function variableSanitized($var, $context, $sanitizations) {
+        foreach ($context as $line) {
+            if ($line->getType() === 'Expr_Assign') {
+                if ($line->var->name === $var->name) {
+                    # Verificar se os parametros do assignment nao sao entrypoints
+                    if ($line->expr->getType() === 'Expr_FuncCall') {
+                        if (in_array($line->expr->name->parts[0], $sanitizations)) {
+                            return true;
+                        }
+                    }
+                }
             }
         }
 
