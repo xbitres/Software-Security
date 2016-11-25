@@ -94,7 +94,7 @@ class PHPSecurityInspector {
     /**
      * @param PhpParser\Node\Expr $expr
      */
-    public function searchSQLSinks($expr) {
+    private function searchSQLSinks($expr) {
         $sinks = array();
         #echo $expr->getType() . '<br />';
 		
@@ -124,7 +124,7 @@ class PHPSecurityInspector {
      * @param  String           $context        Program context passed in the PhpParser framework
      * @return array of Sinks                   [description]
      */
-    public function checkVunerabilities($context, $earlierVars) {
+    private function checkVunerabilities($context, $earlierVars) {
         $sinks = array();
 
         /** @var PhpParser\Node\Expr\Assign $line */
