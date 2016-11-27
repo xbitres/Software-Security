@@ -133,7 +133,8 @@ class PHPSecurityInspector {
 			print_r($line->getType());
             if ($line->getType() === 'Expr_Assign') {
                 $sks = $this->searchSQLSinks($line->expr);
-            } else if ($line->getType() === 'Expr_FuncCall') {
+            }
+            else if ($line->getType() === 'Expr_FuncCall') {
                 $sks = $this->searchSQLSinks($line);
 				echo "aasign <br />";
 				// print, printf, error, file_put_contents and file_get_contents functions, only check if no SQL is found.
@@ -254,9 +255,9 @@ class PHPSecurityInspector {
         # Caso não tenha então:
             # Verificar se var é entry point
         if (empty($this->getConnectedVars($var, $context))) {
-            if (!$this->variableInEntryPoint($var, $context)) {
+            if (!$this->variableInSQLEntryPoint($var, $context)) {
                 return true;
-            } else if ($this->variableSanitized($var, $context, $sanitizations)) {
+            } else if ($this->variableSQLSanitized($var, $context, $sanitizations)) {
                 return true;
             }
         }
@@ -270,7 +271,7 @@ class PHPSecurityInspector {
      * @param array $sanitizations
      * @return bool
      */
-    private function variableSanitized($var, $context, $sanitizations) {
+    private function variableSQLSanitized($var, $context, $sanitizations) {
         foreach ($context as $line) {
             if ($line->getType() === 'Expr_Assign') {
                 if ($line->var->name === $var->name) {
@@ -292,7 +293,7 @@ class PHPSecurityInspector {
      * @param $context
      * @return bool
      */
-    private function variableInEntryPoint($var, $context) {
+    private function variableInSQLEntryPoint($var, $context) {
         if (in_array($var->name, $this->_entryPoints['SQL'])) {
             return true;
         }
