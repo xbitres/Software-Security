@@ -11,6 +11,10 @@ use PhpParser\ParserFactory;
 
 class PHPSecurityInspector {
     private $_parser;
+	private $labelXSSAttack = "Cross Site Scripting";
+	private $labelSqlAttack = "SQL injection";
+	private $sanitizedFunction;
+	
     private $_entryPoints = array(
         "SQL" => array(
             "_GET",
@@ -32,7 +36,7 @@ class PHPSecurityInspector {
             "HTTP_COOKIE_VARS",
             "HTTP_REQUEST_VARS",
             "_FILES",
-            "_SERVERS",
+            "_SERVER",
         ),
     );
     private $vulnerabilities = array(
@@ -62,15 +66,15 @@ class PHPSecurityInspector {
         "pg_send_query"=> array("pg_escape_string","pg_escape_bytea")),
       "XSS" => array(
         //
-        "echo" => array(" htmlentities", "htmlspecialchars","strip_tags","urlencode"),
-        "print" => array(" htmlentities", "htmlspecialchars","strip_tags","urlencode"),
-        "printf" => array(" htmlentities", "htmlspecialchars","strip_tags","urlencode"),
-        "die" => array(" htmlentities", "htmlspecialchars","strip_tags","urlencode"),
-        "error" => array(" htmlentities", "htmlspecialchars","strip_tags","urlencode"),
-        "exit" => array(" htmlentities", "htmlspecialchars","strip_tags","urlencode"),
+        "echo" => array("htmlentities", "htmlspecialchars","strip_tags","urlencode"),
+        "print" => array("htmlentities", "htmlspecialchars","strip_tags","urlencode"),
+        "printf" => array("htmlentities", "htmlspecialchars","strip_tags","urlencode"),
+        "die" => array("htmlentities", "htmlspecialchars","strip_tags","urlencode"),
+        "error" => array("htmlentities", "htmlspecialchars","strip_tags","urlencode"),
+        "exit" => array("htmlentities", "htmlspecialchars","strip_tags","urlencode"),
         //
-        "file_put_contents" => array(" htmlentities", "htmlspecialchars","strip_tags","urlencode"),
-        "file_get_contents" => array(" htmlentities", "htmlspecialchars","strip_tags","urlencode")),
+        "file_put_contents" => array("htmlentities", "htmlspecialchars","strip_tags","urlencode"),
+        "file_get_contents" => array("htmlentities", "htmlspecialchars","strip_tags","urlencode")),
       );
 
     /**
@@ -82,14 +86,39 @@ class PHPSecurityInspector {
         try {
             $stmts = $this->_parser->parse($code);
             echo '<pre>';
-            print_r($stmts);
-            echo '<h1>Vunerabilities</h1>';
-            print_r($this->checkVunerabilities($stmts, array()));
+            //print_r($stmts);
+            //echo '<h1>Vunerabilities</h1>';
+            $sinks = $this->checkVunerabilities($stmts, array());
+			$this->printSinks($sinks);
             echo '</pre>';
         } catch (Error $e) {
             echo 'Parse Error: ', $e->getMessage();
         }
     }
+	
+	
+	private function printSinks($sinks)
+	{
+		foreach($sinks as $sink)
+		{
+			if(!$sink->secure)
+			{
+				echo "Slice vulnerable to ";
+				if($sink->isXss)
+					echo $this->labelXSSAttack . '<br />';
+				else
+					echo $this->labelSqlAttack . '<br />';
+				
+				echo "Slice vulnerable in line " . $sink->line . "<br />";
+			}
+			else
+			{
+				echo "Slice secure <br />";
+				echo "Function that sanitizes data : ";
+				echo $sink->sanitizedFunction;
+			}
+		}
+	}
 
     /**
      * @param PhpParser\Node\Expr $expr
@@ -97,19 +126,19 @@ class PHPSecurityInspector {
     private function searchSQLSinks($expr) {
         $sinks = array();
         #echo $expr->getType() . '<br />';
-		
+		//echo 'In SQL Sinks' . '<br />';
         if ($expr->getType() === 'Expr_FuncCall') {
             /** @var PhpParser\Node\Expr\FuncCall $expr */
             foreach (array_keys($this->vulnerabilities['SQL']) as $sink) {
                 if ($sink === $expr->name->parts[0]) {
-					echo $sink . '<br />';
+					
                     # Construction of vars used in the sink
                     $vars = array();
                     /** @var PhpParser\Node\Arg $arg */
                     foreach ($expr->args as $arg) {
                         $args = array_push($vars, $arg->value);
                     }
-
+					//echo $sink . '<br />';
                     $sinks[$expr->getLine()] = new Sink($sink, $expr->getLine(), false, $this->vulnerabilities['SQL'][$sink], $vars);
                 }
             }
@@ -130,13 +159,12 @@ class PHPSecurityInspector {
         /** @var PhpParser\Node\Expr\Assign $line */
         foreach ($context as $line) {
             $sks = array();
-			print_r($line->getType());
+			//print_r($line->getType());
             if ($line->getType() === 'Expr_Assign') {
                 $sks = $this->searchSQLSinks($line->expr);
             }
             else if ($line->getType() === 'Expr_FuncCall') {
                 $sks = $this->searchSQLSinks($line);
-				echo "aasign <br />";
 				// print, printf, error, file_put_contents and file_get_contents functions, only check if no SQL is found.
 				if (empty($sks))
 					$sks = $this->searchXSSSinks($line);
@@ -160,38 +188,53 @@ class PHPSecurityInspector {
         $unsecureVars = array();
         /** @var Sink $sink */
         foreach ($sinks as $sink) {
-            $varsOfVars = $sink->vars;
+			if($sink->needToCheck)
+			{
+				$varsOfVars = $sink->vars;
+				//echo $varsOfVars. '<br />';
+				while (!empty($varsOfVars)) {
+					/** @var \PhpParser\Node\Expr\Variable $var */
+					$var = array_pop($varsOfVars);
+					array_push($unsecureVars, $var);
 
-            while (!empty($varsOfVars)) {
-                /** @var \PhpParser\Node\Expr\Variable $var */
-                $var = array_pop($varsOfVars);
-                array_push($unsecureVars, $var);
+					
 
-                //echo $var->name . '<br>';
+					//var_dump($this->variableSecure($var,$context, $sink->possibleSanitizations));
+					//var_dump($this->getConnectedVars($var, $context));
+					
+					if(!$sink->isXss)
+					{
+						if ($this->variableSecure($var,$context, $sink->possibleSanitizations)) {
+							echo 'Variable <strong>' . $var->name . '</strong> secure.';
+							array_pop($unsecureVars);
+						} else {
+							if ($connectedVars = $this->getConnectedVars($var, $context)) {
+								array_pop($unsecureVars);
+								$varsOfVars = array_merge($connectedVars, $varsOfVars);
+							}
+						}
+					}
+					else
+					{
+						$secure = $this->isXssSinkSecure($var, $context, $sink->possibleSanitizations);
+						if($secure)
+							array_pop($unsecureVars);
+					}
+				}
+			}
 
-                //var_dump($this->variableSecure($var,$context, $sink->possibleSanitizations));
-                //var_dump($this->getConnectedVars($var, $context));
-
-                if ($this->variableSecure($var,$context, $sink->possibleSanitizations)) {
-                    echo 'Variable <strong>' . $var->name . '</strong> secure.';
-                    array_pop($unsecureVars);
-                } else {
-                    if ($connectedVars = $this->getConnectedVars($var, $context)) {
-                        array_pop($unsecureVars);
-                        $varsOfVars = array_merge($connectedVars, $varsOfVars);
-                    }
-                }
-            }
-
-            if (empty($unsecureVars))
+            if (empty($unsecureVars) && $sink->needToCheck)
+			{
                 $sink->secure = true;
-
+				$sink->setSanitizedFunction($this->sanitizedFunction);
+			}
         }
 
 
 
         return $sinks;
     }
+	
 
     /**
      * @param \PhpParser\Node\Expr\Variable $var
@@ -200,7 +243,7 @@ class PHPSecurityInspector {
      */
     private function getConnectedVars($var, $context) {
         $connectedVars = array();
-
+		print_r($context);
         /** @var \PhpParser\Node\Expr\Assign $line */
         foreach ($context as $line) { # Search in the context for the variable
             if ($line->getType() === 'Expr_Assign') {
@@ -278,6 +321,7 @@ class PHPSecurityInspector {
                     # Verificar se os parametros do assignment nao sao entrypoints
                     if ($line->expr->getType() === 'Expr_FuncCall') {
                         if (in_array($line->expr->name->parts[0], $sanitizations)) {
+							$this->sanitizedFunction = $line->expr->name->parts[0];
                             return true;
                         }
                     }
@@ -294,10 +338,11 @@ class PHPSecurityInspector {
      * @return bool
      */
     private function variableInSQLEntryPoint($var, $context) {
+		print_r($var);
         if (in_array($var->name, $this->_entryPoints['SQL'])) {
             return true;
         }
-		echo "in entry point <br />";
+		//echo "in entry point <br />";
 		var_dump($var);
         /** @var \PhpParser\Node\Expr\Assign $line */
         foreach ($context as $line) {
@@ -316,22 +361,27 @@ class PHPSecurityInspector {
         return false;
     }
 	
-	
+	/**
+	 * Checks for XSS sinks in the received line.
+	 *
+     * @param \PhpParser\Node\Expr $expr
+     */
 	private function searchXSSSinks($expr)
 	{
 		$sinks = array();
         #echo $expr->getType() . '<br />';
-		
+		//echo 'In XSS Sinks' . '<br />';
         if ($expr->getType() === 'Expr_FuncCall') {
             /** @var PhpParser\Node\Expr\FuncCall $expr */
             foreach (array_keys($this->vulnerabilities['XSS']) as $sink) {
-				echo $sink . '<br />';
+				//echo $sink . '<br />';
                 if ($sink === $expr->name->parts[0]) {
-					echo $sink . '<br />';
+					//echo $sink . '<br />';
                     # Construction of vars used in the sink
                     $vars = array();
                     /** @var PhpParser\Node\Arg $arg */
                     foreach ($expr->args as $arg) {
+						//echo $arg . '<br />';
                         $args = array_push($vars, $arg->value);
                     }
 
@@ -340,24 +390,122 @@ class PHPSecurityInspector {
                 }
             }
         }
+		// Echo function case
 		else if ($expr->getType() === 'Stmt_Echo')
 		{
-			echo "echo <br />";
-			print_r($expr);
+			//echo "echo <br />";
+			//print_r($expr);
 			$vars = array();
             /** @var PhpParser\Node\Arg $arg */
             foreach ($expr->exprs as $arg) {
 				if ($arg->getType() === 'Expr_ArrayDimFetch')
 				{
-					$args = array_push($vars, $arg->var->name);
+					if (!in_array($arg->var->name, $this->_entryPoints['XSS']))
+						$args = array_push($vars, $arg);
+					else
+						$sinks[$expr->getLine()] = new Sink("echo", $expr->getLine(), false, $this->vulnerabilities['XSS']["echo"], $arg, true, false);
 				}
-                
+				if ($arg->getType() === 'Expr_Variable')
+				{
+					$args = array_push($vars, $arg);
+				}
+				if($arg->getType() === 'Expr_FuncCall')
+				{
+					if($this->checkIfXssSecure($arg, $this->vulnerabilities['XSS']["echo"]))
+					{
+						$sink = new Sink("echo", $expr->getLine(), true, $this->vulnerabilities['XSS']["echo"], $vars, true, false);
+						$sink->setSanitizedFunction($this->sanitizedFunction);
+						$sinks[$expr->getLine()] = $sink;
+					}
+				}
+				if(!empty($vars))
+					$sinks[$expr->getLine()] = new Sink("echo", $expr->getLine(), false, $this->vulnerabilities['XSS']["echo"], $vars, true);
             }
-
-            $sinks[$expr->getLine()] = new Sink("echo", $expr->getLine(), false, $this->vulnerabilities['XSS']["echo"], $vars, true);
+		}
+		// die, exit functions
+		else if ($expr->getType() === 'Expr_Exit')
+		{
+			 $vars = array();
+			 foreach ($expr as $arg) {
+				if ($arg->getType() === 'Expr_ArrayDimFetch')
+				{
+					if (!in_array($arg->var->name, $this->_entryPoints['XSS']))
+						$args = array_push($vars, $arg);
+					else
+						$sinks[$expr->getLine()] = new Sink($expr->name, $expr->getLine(), false, $this->vulnerabilities['XSS']["echo"], $arg, true, false);
+				}
+				if ($arg->getType() === 'Expr_Variable')
+				{
+					//print_r($arg);
+					$args = array_push($vars, $arg);
+				}
+				if(!empty($vars))
+					$sinks[$expr->getLine()] = new Sink("echo", $expr->getLine(), false, $this->vulnerabilities['XSS']["echo"], $vars, true);
+            }
 		}
 		
 
         return $sinks;
+	}
+	
+	/**
+	 * Starts at the last line to find the last assignment to the sensitive variable.
+	 * We start at the end to get the last modification of the variable.
+	 *
+     * @param \PhpParser\Node\Expr $expr
+     */
+	private function isXssSinkSecure($var, $context, $sanizations)
+	{
+		$length = count($context) - 1;
+		for($i = $length; $i >= 0; $i--)
+		{
+			$line = $context[$i];
+			if ($line->getType() === 'Expr_Assign') 
+			{
+				if($line->var->name === $var->name)
+				{
+					return $this->checkIfXssSecure($line->expr, $sanizations);
+				}
+			}
+		}
+	}
+	
+	
+	/**
+	 * Checks if the given expression has any entry point that is not sanitized.
+	 * if it has, it is unsecure.
+	 * We expect this $expr to be a expression of an assignment or and argument to echo, die, exit functions but never a variable.
+	 * Variable checks are done in other place.
+	 *
+     * @param \PhpParser\Node\Expr $expr
+     */
+	private function checkIfXssSecure($expr, $sanizations)
+	{
+		if($expr->getType() === "Expr_ArrayDimFetch")
+		{
+			if(in_array($expr->var->name, $this->_entryPoints['XSS']))
+			{
+				return false;
+			}
+		}
+		else
+		{
+			if ($expr->getType() === "Expr_FuncCall")
+			{
+				if($expr->args[0]->value->getType() === "Expr_ArrayDimFetch")
+				{
+					if(in_array($expr->args[0]->value->var->name, $this->_entryPoints['XSS']))
+					{
+						if(in_array($expr->name->parts[0], $sanizations))
+						{
+							$this->sanitizedFunction = $expr->name->parts[0];
+						}
+						else
+							return false;
+					}
+				}
+			}
+		}
+		return true;
 	}
 }
