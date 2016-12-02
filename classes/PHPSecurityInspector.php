@@ -108,7 +108,11 @@ class PHPSecurityInspector {
 			}
 			else
 			{
-				echo 'Slice secure.'; print ($html ? '<br />' : "\n");
+				echo 'Slice secure.';
+				print ($html ? '<br />' : "\n");
+				echo "Function that sanitizes data : ";
+				echo $sink->sanitizedFunction;
+				
 			}
 		}
 	}
