@@ -33,4 +33,4 @@ if (strpos($file, '<?php') !== false) {
     $code = '<?php ' . $file;
 }
 
-$inspector = new PHPSecurityInspector($code);
+$inspector = new PHPSecurityInspector($code, false);

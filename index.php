@@ -11,7 +11,7 @@ if (isset($_POST['submit']) && isset($_FILES['code-to-check'])) {
     }
 
 
-    $inspector = new PHPSecurityInspector($code);
+    $inspector = new PHPSecurityInspector($code, true);
 } else {
     ?>
     <!DOCTYPE html>
